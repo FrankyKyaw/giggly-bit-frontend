@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { useState, useRef, useEffect } from "react";
 
@@ -11,170 +11,83 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [laughterDetected, setLaughterDetected] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isLaughterPlaying, setIsLaughterPlaying] = useState<boolean>(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const laughterSoundRef = useRef<HTMLAudioElement | null>(null);
-  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
-  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
+  const isRecordingRef = useRef(false);
 
-  const setupAudioContext = async (stream: MediaStream) => {
+  const handleRecording = async () => {
     try {
-      // Initialize audio context and nodes
-      audioContextRef.current = new AudioContext();
-      gainNodeRef.current = audioContextRef.current.createGain();
-      sourceNodeRef.current = audioContextRef.current.createMediaStreamSource(stream);
-
-      // Connect the nodes
-      sourceNodeRef.current.connect(gainNodeRef.current);
-      gainNodeRef.current.connect(audioContextRef.current.destination);
-
-      // Initially set gain to 1 (normal volume)
-      gainNodeRef.current.gain.value = 1;
-    } catch (err) {
-      console.error("Error setting up audio context:", err);
-      setError("Error setting up audio processing.");
-    }
-  };
-
-  const handleContinuousRecording = async () => {
-    try {
-      const audioChunks: BlobPart[] = [];
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Set up audio context for input control
-      await setupAudioContext(stream);
-      
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event: BlobEvent) => {
         if (event.data.size > 0) {
-          audioChunks.push(event.data);
+          audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorder.onstop = async () => {
-        // Only process audio if we're not currently playing laughter
-        if (!isLaughterPlaying) {
-          const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
-          const formData = new FormData();
-          formData.append("file", audioBlob, "recording.wav");
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" });
+        audioChunksRef.current = []; // Clear chunks for the next recording
 
-          try {
-            const response = await fetch("http://127.0.0.1:5000/upload", {
-              method: "POST",
-              body: formData,
-            });
+        const formData = new FormData();
+        formData.append("file", audioBlob, "recording.wav");
 
-            const data: LaughterDetectionResponse = await response.json();
-            const isLaughter = data.result === "Laughter detected!";
-            setLaughterDetected(isLaughter);
+        try {
+          const response = await fetch("https://giggly-bit-664006500279.us-central1.run.app/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const data: LaughterDetectionResponse = await response.json();
+          const isLaughter = data.result === "Laughter detected!";
+          setLaughterDetected(isLaughter);
 
-            if (isLaughter) {
-              startLaughterPlayback();
-            }
-          } catch (err) {
-            console.error("Error during laughter detection:", err);
-            setError("Error detecting laughter.");
+          if (isLaughter) {
+            laughterSoundRef.current?.play();
           }
+        } catch (err) {
+          console.error("Error during laughter detection:", err);
+          setError("Error detecting laughter.");
         }
 
-        // Start new recording if still in recording state
-        if (isRecording) {
-          audioChunks.length = 0;
+        if (isRecordingRef.current) {
           mediaRecorder.start();
+          setTimeout(() => mediaRecorder.stop(), 3000);
         }
       };
 
+      // Start recording
       mediaRecorder.start();
+      setTimeout(() => mediaRecorder.stop(), 3000); // Automatically stop every 3 seconds
       setIsRecording(true);
-
-      // Set up interval to stop and restart recording every 3 seconds
-      recordingIntervalRef.current = setInterval(() => {
-        if (mediaRecorder.state === "recording") {
-          mediaRecorder.stop();
-        }
-      }, 3000);
     } catch (err) {
       console.error("Error accessing microphone:", err);
       setError("Could not access the microphone.");
     }
   };
 
-  const startLaughterPlayback = () => {
-    if (laughterSoundRef.current && !isLaughterPlaying) {
-      // Mute the input before playing
-      if (gainNodeRef.current) {
-        gainNodeRef.current.gain.value = 0;
-      }
-      
-      laughterSoundRef.current.loop = true;
-      laughterSoundRef.current.play().catch((err) => {
-        console.error("Error playing audio:", err);
-        setError("Error playing laughter sound.");
-      });
-      setIsLaughterPlaying(true);
-
-      // Stop the laughter after 5 seconds
-      setTimeout(() => {
-        stopLaughterPlayback();
-      }, 5000);
-    }
-  };
-
-  const stopLaughterPlayback = () => {
-    if (laughterSoundRef.current) {
-      laughterSoundRef.current.pause();
-      laughterSoundRef.current.currentTime = 0;
-      setIsLaughterPlaying(false);
-
-      // Unmute the input after stopping
-      if (gainNodeRef.current) {
-        gainNodeRef.current.gain.value = 1;
-      }
-    }
-  };
-
   const startRecording = () => {
-    handleContinuousRecording();
+    isRecordingRef.current = true;
+    setIsRecording(true);
+    handleRecording();
   };
 
   const stopRecording = () => {
+    isRecordingRef.current = false;
+    setIsRecording(false);
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      stopLaughterPlayback();
-      if (recordingIntervalRef.current) {
-        clearInterval(recordingIntervalRef.current);
-      }
-      
-      // Clean up MediaRecorder and tracks
-      const tracks = mediaRecorderRef.current.stream.getTracks();
-      tracks.forEach(track => track.stop());
-
-      // Clean up audio context
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
     }
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (recordingIntervalRef.current) {
-        clearInterval(recordingIntervalRef.current);
-      }
       if (mediaRecorderRef.current) {
         const tracks = mediaRecorderRef.current.stream.getTracks();
-        tracks.forEach(track => track.stop());
+        tracks.forEach((track) => track.stop());
       }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
-      stopLaughterPlayback();
     };
   }, []);
 
