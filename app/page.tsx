@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { useState, useRef, useEffect } from "react";
 
 interface LaughterDetectionResponse {
@@ -92,26 +93,23 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-      <h1 className="text-3xl font-bold mb-4">Laughter Detector</h1>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-r from-yellow-300 to-orange-400 p-4">
+      <h1 className="text-4xl font-bold mb-6 text-center text-white">Giggly Bits</h1>
+      <p className="text-xl text-center mb-8 text-white max-w-md">
+      Welcome to GigglyBits! 
+      Experience the joy of laughter as our app detects your giggles and laughs back!
+      </p>
+      <motion.button
+        onClick={isRecording ? stopRecording : startRecording}
+        className={`px-8 py-4 text-white rounded-full font-bold text-xl shadow-lg transition-all duration-300 ${
+          isRecording ? "bg-red-500" : "bg-green-500 hover:bg-green-600"
+        }`}
+        whileHover={isRecording ? {} : { scale: 1.05 }}
+        whileTap={isRecording ? {} : { scale: 0.95 }}
+      >
+        {isRecording ? "Stop Recording..." : "Start Recording"}
+      </motion.button>
 
-      <div className="mb-4">
-        {!isRecording ? (
-          <button
-            onClick={startRecording}
-            className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Start Recording
-          </button>
-        ) : (
-          <button
-            onClick={stopRecording}
-            className="px-6 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-          >
-            Stop Recording
-          </button>
-        )}
-      </div>
 
       {laughterDetected !== null && (
         <div
@@ -119,9 +117,30 @@ export default function Home() {
             laughterDetected ? "text-green-600" : "text-gray-600"
           }`}
         >
-          {laughterDetected ? "Laughter Detected!" : "No Laughter Detected"}
+          {laughterDetected ? "Laughter Detected! 😂" : "No Laughter Detected 😐"}
         </div>
       )}
+
+<div className="mt-12 flex justify-center space-x-4">
+        {["😂", "😆", "🤣"].map((emoji, index) => (
+          <motion.span
+            key={index}
+            className="text-4xl"
+            animate={{
+              y: [0, -10, 0],
+              transition: {
+                duration: 1,
+                repeat: Infinity,
+                repeatType: "reverse",
+                delay: index * 0.2,
+              },
+            }}
+          >
+            {emoji}
+          </motion.span>
+        ))}
+      </div>
+
 
       {error && <div className="text-red-600 font-bold mt-4">{error}</div>}
 
