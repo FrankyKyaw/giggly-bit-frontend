@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   title: "Giggly Bits",
   description: "Laugh for more laughter.",
   icons: {
-    icon: "/laughing.png",
+    icon: "/icon.png",
   },
 };
 
